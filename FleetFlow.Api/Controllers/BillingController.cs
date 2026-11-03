@@ -7,25 +7,27 @@ namespace FleetFlow.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class ReportsController : ControllerBase
+public class BillingController : ControllerBase
 {
-    private readonly IReportService _reportService;
+    private readonly IBillingService _service;
 
-    public ReportsController(IReportService reportService)
+    public BillingController(IBillingService service)
     {
-        _reportService = reportService;
+        _service = service;
     }
 
-    private int GetCompanyId()
+    [HttpPost("checkout")]
+    public async Task<IActionResult> Checkout([FromBody] BillingRequest request)
     {
-        var claim = User.Claims.FirstOrDefault(c => c.Type == "companyId");
-        return claim is null ? 0 : int.Parse(claim.Value);
-    }
-
-    [HttpGet("dashboard")]
-    public async Task<IActionResult> GetDashboard()
-    {
-        return Ok(await _reportService.GetDashboardAsync(GetCompanyId()));
+        var result = await _service.CreateCheckoutSessionAsync(request.PlanName, request.CustomerEmail, request.SuccessUrl, request.CancelUrl);
+        return Ok(result);
     }
 }
 
+public class BillingRequest
+{
+    public string PlanName { get; set; } = "Starter";
+    public string CustomerEmail { get; set; } = string.Empty;
+    public string SuccessUrl { get; set; } = "http://localhost:5173/billing/success";
+    public string CancelUrl { get; set; } = "http://localhost:5173/billing/cancel";
+}

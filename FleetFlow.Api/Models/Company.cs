@@ -1,28 +1,16 @@
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*",
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=FleetFlowDb;Trusted_Connection=True;TrustServerCertificate=True;"
-  },
-  "JwtSettings": {
-    "Secret": "FleetFlowDevelopmentSecretKeyLongEnough123!",
-    "Issuer": "FleetFlow",
-    "Audience": "FleetFlowClients",
-    "ExpirationMinutes": 60,
-    "RefreshTokenExpirationDays": 7
-  },
-  "Stripe": {
-    "ApiKey": "sk_test_1234567890",
-    "WebhookSecret": "whsec_1234567890"
-  },
-  "AzureBlobStorage": {
-    "ConnectionString": "DefaultEndpointsProtocol=https;AccountName=fleetflowstorage;AccountKey=example;EndpointSuffix=core.windows.net",
-    "ContainerName": "fleetflow-documents"
-  }
-}
+namespace FleetFlow.Api.Models;
 
+public class Company
+{
+    public int CompanyId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Address { get; set; }
+    public string? Phone { get; set; }
+    public string SubscriptionStatus { get; set; } = "Trial";
+    public string? SubscriptionPlan { get; set; }
+    public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
+    public ICollection<User> Users { get; set; } = new List<User>();
+    public ICollection<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
+    public ICollection<ServiceType> ServiceTypes { get; set; } = new List<ServiceType>();
+}

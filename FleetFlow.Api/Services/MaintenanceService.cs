@@ -5,135 +5,89 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FleetFlow.Api.Services;
 
-public interface IWorkOrderService
+public interface IMaintenanceService
 {
-    Task<List<WorkOrderDto>> GetWorkOrdersAsync(int companyId);
-    Task<WorkOrderDto?> GetWorkOrderByIdAsync(int companyId, int id);
-    Task<WorkOrderDto> CreateWorkOrderAsync(int companyId, CreateWorkOrderRequest request);
-    Task<WorkOrderDto?> UpdateWorkOrderAsync(int companyId, int id, CreateWorkOrderRequest request);
-    Task<bool> DeleteWorkOrderAsync(int companyId, int id);
+    Task<List<MaintenanceItemDto>> GetMaintenanceAsync(int companyId);
+    Task<MaintenanceItemDto> CreateMaintenanceAsync(int companyId, CreateMaintenanceRequest request);
 }
 
-public class WorkOrderService : IWorkOrderService
+public class MaintenanceService : IMaintenanceService
 {
     private readonly FleetFlowDbContext _context;
 
-    public WorkOrderService(FleetFlowDbContext context)
+    public MaintenanceService(FleetFlowDbContext context)
     {
         _context = context;
     }
 
-    public async Task<List<WorkOrderDto>> GetWorkOrdersAsync(int companyId)
+    public async Task<List<MaintenanceItemDto>> GetMaintenanceAsync(int companyId)
     {
-        var query = await _context.WorkOrders
-            .Include(w => w.Vehicle)
-            .Where(w => w.Vehicle != null && w.Vehicle.CompanyId == companyId)
-            .OrderByDescending(w => w.CreatedDate)
+        var schedules = await _context.MaintenanceSchedules
+            .Include(s => s.Vehicle)
+            .Include(s => s.ServiceType)
+            .Where(s => s.Vehicle != null && s.Vehicle.CompanyId == companyId)
             .ToListAsync();
 
-        return query.Select(w => new WorkOrderDto
+        var result = new List<MaintenanceItemDto>();
+
+        foreach (var schedule in schedules)
         {
-            WorkOrderId = w.WorkOrderId,
-            VehicleId = w.VehicleId,
-            AssignedUserId = w.AssignedUserId,
-            VehicleNumber = w.Vehicle?.VehicleNumber ?? string.Empty,
-            Title = w.Title,
-            Description = w.Description,
-            Priority = w.Priority,
-            Status = w.Status,
-            LaborCost = w.LaborCost,
-            PartsCost = w.PartsCost,
-            TotalCost = w.TotalCost,
-            CreatedDate = w.CreatedDate,
-            CompletedDate = w.CompletedDate
-        }).ToList();
-    }
+            var status = "Current";
+            var today = DateTime.UtcNow;
+            if (schedule.NextDueDate.HasValue && schedule.NextDueDate.Value < today)
+                status = "Overdue";
+            else if (schedule.NextDueDate.HasValue && schedule.NextDueDate.Value <= today.AddDays(30))
+                status = "Due Soon";
 
-    public async Task<WorkOrderDto?> GetWorkOrderByIdAsync(int companyId, int id)
-    {
-        var workOrder = await _context.WorkOrders
-            .Include(w => w.Vehicle)
-            .FirstOrDefaultAsync(w => w.WorkOrderId == id && w.Vehicle != null && w.Vehicle.CompanyId == companyId);
-
-        if (workOrder is null) return null;
-
-        return new WorkOrderDto
-        {
-            WorkOrderId = workOrder.WorkOrderId,
-            VehicleId = workOrder.VehicleId,
-            AssignedUserId = workOrder.AssignedUserId,
-            VehicleNumber = workOrder.Vehicle?.VehicleNumber ?? string.Empty,
-            Title = workOrder.Title,
-            Description = workOrder.Description,
-            Priority = workOrder.Priority,
-            Status = workOrder.Status,
-            LaborCost = workOrder.LaborCost,
-            PartsCost = workOrder.PartsCost,
-            TotalCost = workOrder.TotalCost,
-            CreatedDate = workOrder.CreatedDate,
-            CompletedDate = workOrder.CompletedDate
-        };
-    }
-
-    public async Task<WorkOrderDto> CreateWorkOrderAsync(int companyId, CreateWorkOrderRequest request)
-    {
-        var vehicleExists = await _context.Vehicles.AnyAsync(v => v.VehicleId == request.VehicleId && v.CompanyId == companyId);
-        if (!vehicleExists) throw new InvalidOperationException("Vehicle not found in your company.");
-
-        var workOrder = new WorkOrder
-        {
-            VehicleId = request.VehicleId,
-            AssignedUserId = request.AssignedUserId,
-            Title = request.Title,
-            Description = request.Description,
-            Priority = request.Priority,
-            Status = request.Status,
-            LaborCost = 0,
-            PartsCost = 0,
-            TotalCost = 0
-        };
-
-        _context.WorkOrders.Add(workOrder);
-        await _context.SaveChangesAsync();
-
-        return await GetWorkOrderByIdAsync(companyId, workOrder.WorkOrderId) ?? new WorkOrderDto();
-    }
-
-    public async Task<WorkOrderDto?> UpdateWorkOrderAsync(int companyId, int id, CreateWorkOrderRequest request)
-    {
-        var workOrder = await _context.WorkOrders
-            .Include(w => w.Vehicle)
-            .FirstOrDefaultAsync(w => w.WorkOrderId == id && w.Vehicle != null && w.Vehicle.CompanyId == companyId);
-
-        if (workOrder is null) return null;
-
-        workOrder.VehicleId = request.VehicleId;
-        workOrder.AssignedUserId = request.AssignedUserId;
-        workOrder.Title = request.Title;
-        workOrder.Description = request.Description;
-        workOrder.Priority = request.Priority;
-        workOrder.Status = request.Status;
-
-        if (request.Status == "Completed")
-        {
-            workOrder.CompletedDate ??= DateTime.UtcNow;
+            result.Add(new MaintenanceItemDto
+            {
+                ScheduleId = schedule.ScheduleId,
+                VehicleId = schedule.VehicleId,
+                VehicleNumber = schedule.Vehicle?.VehicleNumber ?? string.Empty,
+                ServiceType = schedule.ServiceType?.Name ?? string.Empty,
+                LastServiceDate = schedule.LastServiceDate,
+                DueDate = schedule.NextDueDate,
+                CurrentMileage = schedule.Vehicle?.CurrentMileage ?? 0,
+                DueMileage = schedule.NextDueMileage,
+                Status = status
+            });
         }
 
-        await _context.SaveChangesAsync();
-        return await GetWorkOrderByIdAsync(companyId, id);
+        return result;
     }
 
-    public async Task<bool> DeleteWorkOrderAsync(int companyId, int id)
+    public async Task<MaintenanceItemDto> CreateMaintenanceAsync(int companyId, CreateMaintenanceRequest request)
     {
-        var workOrder = await _context.WorkOrders
-            .Include(w => w.Vehicle)
-            .FirstOrDefaultAsync(w => w.WorkOrderId == id && w.Vehicle != null && w.Vehicle.CompanyId == companyId);
+        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == request.VehicleId && v.CompanyId == companyId);
+        if (vehicle is null) throw new InvalidOperationException("Vehicle not found in company.");
 
-        if (workOrder is null) return false;
+        var serviceType = await _context.ServiceTypes.FirstOrDefaultAsync(s => s.ServiceTypeId == request.ServiceTypeId && s.CompanyId == companyId);
+        if (serviceType is null) throw new InvalidOperationException("Service type not found.");
 
-        _context.WorkOrders.Remove(workOrder);
+        var schedule = new MaintenanceSchedule
+        {
+            VehicleId = request.VehicleId,
+            ServiceTypeId = request.ServiceTypeId,
+            LastServiceMileage = request.LastServiceMileage,
+            LastServiceDate = request.LastServiceDate,
+            NextDueMileage = request.NextDueMileage,
+            NextDueDate = request.NextDueDate
+        };
+
+        _context.MaintenanceSchedules.Add(schedule);
         await _context.SaveChangesAsync();
-        return true;
+
+        return new MaintenanceItemDto
+        {
+            ScheduleId = schedule.ScheduleId,
+            VehicleId = vehicle.VehicleId,
+            VehicleNumber = vehicle.VehicleNumber,
+            ServiceType = serviceType.Name,
+            LastServiceDate = schedule.LastServiceDate,
+            DueDate = schedule.NextDueDate,
+            CurrentMileage = vehicle.CurrentMileage,
+            DueMileage = schedule.NextDueMileage,
+            Status = "Current"
+        };
     }
 }
-

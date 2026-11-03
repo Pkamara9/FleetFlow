@@ -1,14 +1,13 @@
 namespace FleetFlow.Api.Models;
 
-public class AuditLog
+public class RefreshToken
 {
-    public int AuditLogId { get; set; }
-    public int? CompanyId { get; set; }
-    public int? UserId { get; set; }
-    public string EntityType { get; set; } = string.Empty;
-    public int? EntityId { get; set; }
-    public string Action { get; set; } = string.Empty;
-    public string? Details { get; set; }
+    public int RefreshTokenId { get; set; }
+    public int UserId { get; set; }
+    public string Token { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public bool IsRevoked { get; set; }
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
-}
 
+    public User? User { get; set; }
+}

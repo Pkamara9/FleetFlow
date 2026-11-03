@@ -1,80 +1,60 @@
-using FleetFlow.Api.Data;
-using FleetFlow.Api.DTOs;
-using Microsoft.EntityFrameworkCore;
+using Stripe;
+using Stripe.Checkout;
 
 namespace FleetFlow.Api.Services;
 
-public interface IReportService
+public interface IBillingService
 {
-    Task<DashboardDto> GetDashboardAsync(int companyId);
+    Task<object> CreateCheckoutSessionAsync(string planName, string customerEmail, string successUrl, string cancelUrl);
 }
 
-public class ReportService : IReportService
+public class BillingService : IBillingService
 {
-    private readonly FleetFlowDbContext _context;
+    private readonly IConfiguration _configuration;
 
-    public ReportService(FleetFlowDbContext context)
+    public BillingService(IConfiguration configuration)
     {
-        _context = context;
+        _configuration = configuration;
     }
 
-    public async Task<DashboardDto> GetDashboardAsync(int companyId)
+    public async Task<object> CreateCheckoutSessionAsync(string planName, string customerEmail, string successUrl, string cancelUrl)
     {
-        var vehicles = await _context.Vehicles.Where(v => v.CompanyId == companyId).ToListAsync();
-        var workOrders = await _context.WorkOrders
-            .Include(w => w.Vehicle)
-            .Where(w => w.Vehicle != null && w.Vehicle.CompanyId == companyId)
-            .ToListAsync();
+        StripeConfiguration.ApiKey = _configuration["Stripe:ApiKey"];
 
-        var maintenanceSchedules = await _context.MaintenanceSchedules
-            .Include(s => s.Vehicle)
-            .Where(s => s.Vehicle != null && s.Vehicle.CompanyId == companyId)
-            .ToListAsync();
-
-        var totalVehicles = vehicles.Count;
-        var openWorkOrders = workOrders.Count(w => w.Status != "Completed");
-        var dueIn30Days = maintenanceSchedules.Count(s => s.NextDueDate.HasValue && s.NextDueDate.Value <= DateTime.UtcNow.AddDays(30));
-        var overdueMaintenance = maintenanceSchedules.Count(s => s.NextDueDate.HasValue && s.NextDueDate.Value < DateTime.UtcNow);
-        var monthlyMaintenanceCost = workOrders
-            .Where(w => w.CreatedDate >= DateTime.UtcNow.AddDays(-30))
-            .Sum(w => w.TotalCost);
-
-        var vehicleStatusChart = new List<ChartValue>
+        var priceMap = new Dictionary<string, long>
         {
-            new() { Name = "Active", Value = vehicles.Count(v => v.Status == "Active") },
-            new() { Name = "In Service", Value = vehicles.Count(v => v.Status == "In Service") },
-            new() { Name = "Maintenance", Value = vehicles.Count(v => v.Status == "Maintenance") }
+            ["Starter"] = 4900,
+            ["Growth"] = 9900,
+            ["Pro"] = 19900
         };
 
-        var maintenanceCostChart = new List<ChartValue>
+        var options = new SessionCreateOptions
         {
-            new() { Name = "Jan", Value = 1200m },
-            new() { Name = "Feb", Value = 2100m },
-            new() { Name = "Mar", Value = 1800m },
-            new() { Name = "Apr", Value = 2400m },
-            new() { Name = "May", Value = 2600m },
-            new() { Name = "Jun", Value = 3100m }
+            CustomerEmail = customerEmail,
+            LineItems = new List<SessionLineItemOptions>
+            {
+                new()
+                {
+                    PriceData = new SessionLineItemPriceDataOptions
+                    {
+                        Currency = "usd",
+                        UnitAmount = priceMap.GetValueOrDefault(planName, 4900),
+                        ProductData = new SessionLineItemPriceDataProductDataOptions
+                        {
+                            Name = planName
+                        }
+                    },
+                    Quantity = 1
+                }
+            },
+            Mode = "subscription",
+            SuccessUrl = successUrl,
+            CancelUrl = cancelUrl
         };
 
-        var workOrderStatusChart = new List<ChartValue>
-        {
-            new() { Name = "Open", Value = workOrders.Count(w => w.Status == "Open") },
-            new() { Name = "In Progress", Value = workOrders.Count(w => w.Status == "In Progress") },
-            new() { Name = "Waiting Parts", Value = workOrders.Count(w => w.Status == "Waiting Parts") },
-            new() { Name = "Completed", Value = workOrders.Count(w => w.Status == "Completed") }
-        };
+        var service = new SessionService();
+        var session = await service.CreateAsync(options);
 
-        return new DashboardDto
-        {
-            TotalVehicles = totalVehicles,
-            OpenWorkOrders = openWorkOrders,
-            DueIn30Days = dueIn30Days,
-            OverdueMaintenance = overdueMaintenance,
-            MonthlyMaintenanceCost = monthlyMaintenanceCost,
-            VehicleStatusChart = vehicleStatusChart,
-            MaintenanceCostChart = maintenanceCostChart,
-            WorkOrderStatusChart = workOrderStatusChart
-        };
+        return new { sessionId = session.Id, url = session.Url };
     }
 }
-

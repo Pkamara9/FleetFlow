@@ -2,46 +2,67 @@ using FleetFlow.Api.DTOs;
 using FleetFlow.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace FleetFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+[Authorize]
+public class VehiclesController : ControllerBase
 {
-    private readonly IAuthService _authService;
+    private readonly IVehicleService _vehicleService;
 
-    public AuthController(IAuthService authService)
+    public VehiclesController(IVehicleService vehicleService)
     {
-        _authService = authService;
+        _vehicleService = vehicleService;
     }
 
-    [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    private int GetCompanyId()
     {
-        var response = await _authService.RegisterAsync(request);
-        return Ok(response);
+        var companyIdClaim = User.Claims.FirstOrDefault(c => c.Type == "companyId");
+        return companyIdClaim is null ? 0 : int.Parse(companyIdClaim.Value);
     }
 
-    [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
     {
-        var response = await _authService.LoginAsync(request);
-        return Ok(response);
+        var companyId = GetCompanyId();
+        return Ok(await _vehicleService.GetVehiclesAsync(companyId));
     }
 
-    [HttpPost("refresh")]
-    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id)
     {
-        var response = await _authService.RefreshTokenAsync(request);
-        return Ok(response);
+        var companyId = GetCompanyId();
+        var vehicle = await _vehicleService.GetVehicleByIdAsync(companyId, id);
+        return vehicle is null ? NotFound() : Ok(vehicle);
     }
 
-    [Authorize]
-    [HttpGet("me")]
-    public IActionResult Me()
+    [HttpPost]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> Create([FromBody] CreateVehicleRequest request)
     {
-        return Ok(new { user = User.Identity?.Name });
+        var companyId = GetCompanyId();
+        var vehicle = await _vehicleService.CreateVehicleAsync(companyId, request);
+        return CreatedAtAction(nameof(GetById), new { id = vehicle.VehicleId }, vehicle);
+    }
+
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> Update(int id, [FromBody] CreateVehicleRequest request)
+    {
+        var companyId = GetCompanyId();
+        var vehicle = await _vehicleService.UpdateVehicleAsync(companyId, id, request);
+        return vehicle is null ? NotFound() : Ok(vehicle);
+    }
+
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var companyId = GetCompanyId();
+        var deleted = await _vehicleService.DeleteVehicleAsync(companyId, id);
+        return deleted ? NoContent() : NotFound();
     }
 }
-

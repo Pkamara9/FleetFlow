@@ -1,16 +1,21 @@
 namespace FleetFlow.Api.Models;
 
-public class MaintenanceSchedule
+public class WorkOrder
 {
-    public int ScheduleId { get; set; }
+    public int WorkOrderId { get; set; }
     public int VehicleId { get; set; }
-    public int ServiceTypeId { get; set; }
-    public int LastServiceMileage { get; set; }
-    public DateTime? LastServiceDate { get; set; }
-    public int? NextDueMileage { get; set; }
-    public DateTime? NextDueDate { get; set; }
+    public int? AssignedUserId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string Priority { get; set; } = "Medium";
+    public string Status { get; set; } = "Open";
+    public decimal LaborCost { get; set; }
+    public decimal PartsCost { get; set; }
+    public decimal TotalCost { get; set; }
+    public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedDate { get; set; }
 
     public Vehicle? Vehicle { get; set; }
-    public ServiceType? ServiceType { get; set; }
+    public User? AssignedUser { get; set; }
+    public ICollection<ServiceRecord> ServiceRecords { get; set; } = new List<ServiceRecord>();
 }
-

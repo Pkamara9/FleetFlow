@@ -1,34 +1,391 @@
-using FleetFlow.Api.Services;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+# FleetFlow.Api
 
-namespace FleetFlow.Api.Controllers;
+This is the backend API for FleetFlow, built with .NET 8, Entity Framework Core, SQL Server, and JWT-based authentication.
 
-[ApiController]
-[Route("api/[controller]")]
-[Authorize]
-public class BillingController : ControllerBase
-{
-    private readonly IBillingService _service;
+## Features
 
-    public BillingController(IBillingService service)
-    {
-        _service = service;
-    }
+- JWT auth and role-based authorization
+- Vehicle management
+- Work order management
+- Maintenance scheduling
+- Dashboard reports
+- Stripe billing integration
 
-    [HttpPost("checkout")]
-    public async Task<IActionResult> Checkout([FromBody] BillingRequest request)
-    {
-        var result = await _service.CreateCheckoutSessionAsync(request.PlanName, request.CustomerEmail, request.SuccessUrl, request.CancelUrl);
-        return Ok(result);
-    }
-}
+## Run locally
 
-public class BillingRequest
-{
-    public string PlanName { get; set; } = "Starter";
-    public string CustomerEmail { get; set; } = string.Empty;
-    public string SuccessUrl { get; set; } = "http://localhost:5173/billing/success";
-    public string CancelUrl { get; set; } = "http://localhost:5173/billing/cancel";
-}
+```bash
+dotnet restore
+dotnet run
+```
 
+## Database setup
+
+Update the connection string in appsettings.json and run:
+
+```bash
+dotnet ef database update
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+n

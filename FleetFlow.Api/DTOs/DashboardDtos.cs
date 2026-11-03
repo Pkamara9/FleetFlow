@@ -1,24 +1,19 @@
 namespace FleetFlow.Api.DTOs;
 
-public class MaintenanceItemDto
+public class DashboardDto
 {
-    public int ScheduleId { get; set; }
-    public string VehicleNumber { get; set; } = string.Empty;
-    public string ServiceType { get; set; } = string.Empty;
-    public DateTime? LastServiceDate { get; set; }
-    public DateTime? DueDate { get; set; }
-    public int CurrentMileage { get; set; }
-    public int? DueMileage { get; set; }
-    public string Status { get; set; } = "Current";
+    public int TotalVehicles { get; set; }
+    public int OpenWorkOrders { get; set; }
+    public int DueIn30Days { get; set; }
+    public int OverdueMaintenance { get; set; }
+    public decimal MonthlyMaintenanceCost { get; set; }
+    public List<ChartValue> VehicleStatusChart { get; set; } = new();
+    public List<ChartValue> MaintenanceCostChart { get; set; } = new();
+    public List<ChartValue> WorkOrderStatusChart { get; set; } = new();
 }
 
-public class CreateMaintenanceRequest
+public class ChartValue
 {
-    public int VehicleId { get; set; }
-    public int ServiceTypeId { get; set; }
-    public int LastServiceMileage { get; set; }
-    public DateTime? LastServiceDate { get; set; }
-    public int? NextDueMileage { get; set; }
-    public DateTime? NextDueDate { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Value { get; set; }
 }
-

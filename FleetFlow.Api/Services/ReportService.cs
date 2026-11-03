@@ -1,92 +1,79 @@
 using FleetFlow.Api.Data;
 using FleetFlow.Api.DTOs;
-using FleetFlow.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace FleetFlow.Api.Services;
 
-public interface IMaintenanceService
+public interface IReportService
 {
-    Task<List<MaintenanceItemDto>> GetMaintenanceAsync(int companyId);
-    Task<MaintenanceItemDto> CreateMaintenanceAsync(int companyId, CreateMaintenanceRequest request);
+    Task<DashboardDto> GetDashboardAsync(int companyId);
 }
 
-public class MaintenanceService : IMaintenanceService
+public class ReportService : IReportService
 {
     private readonly FleetFlowDbContext _context;
 
-    public MaintenanceService(FleetFlowDbContext context)
+    public ReportService(FleetFlowDbContext context)
     {
         _context = context;
     }
 
-    public async Task<List<MaintenanceItemDto>> GetMaintenanceAsync(int companyId)
+    public async Task<DashboardDto> GetDashboardAsync(int companyId)
     {
-        var schedules = await _context.MaintenanceSchedules
+        var vehicles = await _context.Vehicles.Where(v => v.CompanyId == companyId).ToListAsync();
+        var workOrders = await _context.WorkOrders
+            .Include(w => w.Vehicle)
+            .Where(w => w.Vehicle != null && w.Vehicle.CompanyId == companyId)
+            .ToListAsync();
+
+        var maintenanceSchedules = await _context.MaintenanceSchedules
             .Include(s => s.Vehicle)
-            .Include(s => s.ServiceType)
             .Where(s => s.Vehicle != null && s.Vehicle.CompanyId == companyId)
             .ToListAsync();
 
-        var result = new List<MaintenanceItemDto>();
+        var totalVehicles = vehicles.Count;
+        var openWorkOrders = workOrders.Count(w => w.Status != "Completed");
+        var dueIn30Days = maintenanceSchedules.Count(s => s.NextDueDate.HasValue && s.NextDueDate.Value <= DateTime.UtcNow.AddDays(30));
+        var overdueMaintenance = maintenanceSchedules.Count(s => s.NextDueDate.HasValue && s.NextDueDate.Value < DateTime.UtcNow);
+        var monthlyMaintenanceCost = workOrders
+            .Where(w => w.CreatedDate >= DateTime.UtcNow.AddDays(-30))
+            .Sum(w => w.TotalCost);
 
-        foreach (var schedule in schedules)
+        var vehicleStatusChart = new List<ChartValue>
         {
-            var status = "Current";
-            var today = DateTime.UtcNow;
-            if (schedule.NextDueDate.HasValue && schedule.NextDueDate.Value < today)
-                status = "Overdue";
-            else if (schedule.NextDueDate.HasValue && schedule.NextDueDate.Value <= today.AddDays(30))
-                status = "Due Soon";
-
-            result.Add(new MaintenanceItemDto
-            {
-                ScheduleId = schedule.ScheduleId,
-                VehicleNumber = schedule.Vehicle?.VehicleNumber ?? string.Empty,
-                ServiceType = schedule.ServiceType?.Name ?? string.Empty,
-                LastServiceDate = schedule.LastServiceDate,
-                DueDate = schedule.NextDueDate,
-                CurrentMileage = schedule.Vehicle?.CurrentMileage ?? 0,
-                DueMileage = schedule.NextDueMileage,
-                Status = status
-            });
-        }
-
-        return result;
-    }
-
-    public async Task<MaintenanceItemDto> CreateMaintenanceAsync(int companyId, CreateMaintenanceRequest request)
-    {
-        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == request.VehicleId && v.CompanyId == companyId);
-        if (vehicle is null) throw new InvalidOperationException("Vehicle not found in company.");
-
-        var serviceType = await _context.ServiceTypes.FirstOrDefaultAsync(s => s.ServiceTypeId == request.ServiceTypeId && s.CompanyId == companyId);
-        if (serviceType is null) throw new InvalidOperationException("Service type not found.");
-
-        var schedule = new MaintenanceSchedule
-        {
-            VehicleId = request.VehicleId,
-            ServiceTypeId = request.ServiceTypeId,
-            LastServiceMileage = request.LastServiceMileage,
-            LastServiceDate = request.LastServiceDate,
-            NextDueMileage = request.NextDueMileage,
-            NextDueDate = request.NextDueDate
+            new() { Name = "Active", Value = vehicles.Count(v => v.Status == "Active") },
+            new() { Name = "In Service", Value = vehicles.Count(v => v.Status == "In Service") },
+            new() { Name = "Maintenance", Value = vehicles.Count(v => v.Status == "Maintenance") }
         };
 
-        _context.MaintenanceSchedules.Add(schedule);
-        await _context.SaveChangesAsync();
+        var monthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+        var maintenanceCostChart = Enumerable.Range(0, 6)
+            .Select(i => monthStart.AddMonths(i - 5))
+            .Select(m => new ChartValue
+            {
+                Name = m.ToString("MMM yyyy"),
+                Value = workOrders.Where(w => w.CreatedDate.Year == m.Year && w.CreatedDate.Month == m.Month).Sum(w => w.TotalCost)
+            })
+            .ToList();
 
-        return new MaintenanceItemDto
+        var workOrderStatusChart = new List<ChartValue>
         {
-            ScheduleId = schedule.ScheduleId,
-            VehicleNumber = vehicle.VehicleNumber,
-            ServiceType = serviceType.Name,
-            LastServiceDate = schedule.LastServiceDate,
-            DueDate = schedule.NextDueDate,
-            CurrentMileage = vehicle.CurrentMileage,
-            DueMileage = schedule.NextDueMileage,
-            Status = "Current"
+            new() { Name = "Open", Value = workOrders.Count(w => w.Status == "Open") },
+            new() { Name = "In Progress", Value = workOrders.Count(w => w.Status == "In Progress") },
+            new() { Name = "Waiting Parts", Value = workOrders.Count(w => w.Status == "Waiting Parts") },
+            new() { Name = "Completed", Value = workOrders.Count(w => w.Status == "Completed") }
+        };
+
+        return new DashboardDto
+        {
+            TotalVehicles = totalVehicles,
+            OpenWorkOrders = openWorkOrders,
+            DueIn30Days = dueIn30Days,
+            OverdueMaintenance = overdueMaintenance,
+            MonthlyMaintenanceCost = monthlyMaintenanceCost,
+            VehicleStatusChart = vehicleStatusChart,
+            MaintenanceCostChart = maintenanceCostChart,
+            WorkOrderStatusChart = workOrderStatusChart
         };
     }
 }
-

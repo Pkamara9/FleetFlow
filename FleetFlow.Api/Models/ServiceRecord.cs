@@ -1,22 +1,17 @@
 namespace FleetFlow.Api.Models;
 
-public class WorkOrder
+public class ServiceRecord
 {
-    public int WorkOrderId { get; set; }
+    public int ServiceRecordId { get; set; }
     public int VehicleId { get; set; }
-    public int? AssignedUserId { get; set; }
-    public string Title { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public string Priority { get; set; } = "Medium";
-    public string Status { get; set; } = "Open";
-    public decimal LaborCost { get; set; }
-    public decimal PartsCost { get; set; }
-    public decimal TotalCost { get; set; }
-    public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
-    public DateTime? CompletedDate { get; set; }
+    public int? WorkOrderId { get; set; }
+    public int ServiceTypeId { get; set; }
+    public DateTime ServiceDate { get; set; }
+    public int Mileage { get; set; }
+    public decimal Cost { get; set; }
+    public string? Notes { get; set; }
 
     public Vehicle? Vehicle { get; set; }
-    public User? AssignedUser { get; set; }
-    public ICollection<ServiceRecord> ServiceRecords { get; set; } = new List<ServiceRecord>();
+    public WorkOrder? WorkOrder { get; set; }
+    public ServiceType? ServiceType { get; set; }
 }
-

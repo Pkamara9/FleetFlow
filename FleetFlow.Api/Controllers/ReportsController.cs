@@ -1,4 +1,3 @@
-using FleetFlow.Api.DTOs;
 using FleetFlow.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,13 +7,13 @@ namespace FleetFlow.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class MaintenanceController : ControllerBase
+public class ReportsController : ControllerBase
 {
-    private readonly IMaintenanceService _service;
+    private readonly IReportService _reportService;
 
-    public MaintenanceController(IMaintenanceService service)
+    public ReportsController(IReportService reportService)
     {
-        _service = service;
+        _reportService = reportService;
     }
 
     private int GetCompanyId()
@@ -23,18 +22,9 @@ public class MaintenanceController : ControllerBase
         return claim is null ? 0 : int.Parse(claim.Value);
     }
 
-    [HttpGet]
-    public async Task<IActionResult> GetMaintenance()
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> GetDashboard()
     {
-        return Ok(await _service.GetMaintenanceAsync(GetCompanyId()));
-    }
-
-    [HttpPost]
-    [Authorize(Roles = "Admin,Manager")]
-    public async Task<IActionResult> Create([FromBody] CreateMaintenanceRequest request)
-    {
-        var item = await _service.CreateMaintenanceAsync(GetCompanyId(), request);
-        return Ok(item);
+        return Ok(await _reportService.GetDashboardAsync(GetCompanyId()));
     }
 }
-
