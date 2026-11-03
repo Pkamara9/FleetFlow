@@ -8,11 +8,11 @@ namespace FleetFlow.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class WorkOrdersController : ControllerBase
+public class MaintenanceController : ControllerBase
 {
-    private readonly IWorkOrderService _service;
+    private readonly IMaintenanceService _service;
 
-    public WorkOrdersController(IWorkOrderService service)
+    public MaintenanceController(IMaintenanceService service)
     {
         _service = service;
     }
@@ -24,40 +24,16 @@ public class WorkOrdersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetMaintenance()
     {
-        return Ok(await _service.GetWorkOrdersAsync(GetCompanyId()));
-    }
-
-    [HttpGet("{id:int}")]
-    public async Task<IActionResult> GetById(int id)
-    {
-        var item = await _service.GetWorkOrderByIdAsync(GetCompanyId(), id);
-        return item is null ? NotFound() : Ok(item);
+        return Ok(await _service.GetMaintenanceAsync(GetCompanyId()));
     }
 
     [HttpPost]
     [Authorize(Roles = "Admin,Manager")]
-    public async Task<IActionResult> Create([FromBody] CreateWorkOrderRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateMaintenanceRequest request)
     {
-        var item = await _service.CreateWorkOrderAsync(GetCompanyId(), request);
-        return CreatedAtAction(nameof(GetById), new { id = item.WorkOrderId }, item);
-    }
-
-    [HttpPut("{id:int}")]
-    [Authorize(Roles = "Admin,Manager,Technician")]
-    public async Task<IActionResult> Update(int id, [FromBody] CreateWorkOrderRequest request)
-    {
-        var item = await _service.UpdateWorkOrderAsync(GetCompanyId(), id, request);
-        return item is null ? NotFound() : Ok(item);
-    }
-
-    [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin,Manager")]
-    public async Task<IActionResult> Delete(int id)
-    {
-        var deleted = await _service.DeleteWorkOrderAsync(GetCompanyId(), id);
-        return deleted ? NoContent() : NotFound();
+        var item = await _service.CreateMaintenanceAsync(GetCompanyId(), request);
+        return Ok(item);
     }
 }
-

@@ -1,20 +1,48 @@
-namespace FleetFlow.Api.DTOs;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using FleetFlow.Api.Models;
+using Microsoft.IdentityModel.Tokens;
 
-public class DashboardDto
+namespace FleetFlow.Api.Services;
+
+public interface ITokenService
 {
-    public int TotalVehicles { get; set; }
-    public int OpenWorkOrders { get; set; }
-    public int DueIn30Days { get; set; }
-    public int OverdueMaintenance { get; set; }
-    public decimal MonthlyMaintenanceCost { get; set; }
-    public List<ChartValue> VehicleStatusChart { get; set; } = new();
-    public List<ChartValue> MaintenanceCostChart { get; set; } = new();
-    public List<ChartValue> WorkOrderStatusChart { get; set; } = new();
+    string GenerateAccessToken(User user, string issuer, string audience, string secret, int expirationMinutes);
+    string GenerateRefreshToken();
 }
 
-public class ChartValue
+public class TokenService : ITokenService
 {
-    public string Name { get; set; } = string.Empty;
-    public decimal Value { get; set; }
-}
+    public string GenerateAccessToken(User user, string issuer, string audience, string secret, int expirationMinutes)
+    {
+        var key = Encoding.ASCII.GetBytes(secret);
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+            new Claim(ClaimTypes.Name, user.Email),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Role, user.Role),
+            new Claim("companyId", user.CompanyId.ToString())
+        };
 
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(claims),
+            Expires = DateTime.UtcNow.AddMinutes(expirationMinutes),
+            Issuer = issuer,
+            Audience = audience,
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+
+        return tokenHandler.WriteToken(token);
+    }
+
+    public string GenerateRefreshToken()
+    {
+        return Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+    }
+}

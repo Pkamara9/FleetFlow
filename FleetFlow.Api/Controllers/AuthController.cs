@@ -1,40 +1,55 @@
-using System.Net;
-using System.Text.Json;
+using FleetFlow.Api.DTOs;
+using FleetFlow.Api.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
-namespace FleetFlow.Api.Middleware;
+namespace FleetFlow.Api.Controllers;
 
-public class ErrorHandlingMiddleware
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
 {
-    private readonly RequestDelegate _next;
-    private readonly ILogger<ErrorHandlingMiddleware> _logger;
+    private readonly IAuthService _authService;
 
-    public ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger)
+    public AuthController(IAuthService authService)
     {
-        _next = next;
-        _logger = logger;
+        _authService = authService;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        try
+        var response = await _authService.RegisterAsync(request);
+        return Ok(response);
+    }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    {
+        var response = await _authService.LoginAsync(request);
+        return Ok(response);
+    }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+    {
+        var response = await _authService.RefreshTokenAsync(request);
+        return Ok(response);
+    }
+
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IActionResult> Me([FromServices] FleetFlow.Api.Data.FleetFlowDbContext db)
+    {
+        var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!int.TryParse(idClaim, out var userId)) return Unauthorized();
+        var u = await db.Users.Include(x => x.Company).FirstOrDefaultAsync(x => x.UserId == userId);
+        if (u is null) return Unauthorized();
+        return Ok(new UserDto
         {
-            await _next(context);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unhandled exception");
-
-            context.Response.ContentType = "application/json";
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-
-            var response = new
-            {
-                message = ex.Message,
-                statusCode = context.Response.StatusCode
-            };
-
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
-        }
+            UserId = u.UserId, FirstName = u.FirstName, LastName = u.LastName,
+            Email = u.Email, Role = u.Role, CompanyName = u.Company?.Name ?? ""
+        });
     }
 }
-

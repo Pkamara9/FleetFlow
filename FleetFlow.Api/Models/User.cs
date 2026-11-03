@@ -1,17 +1,17 @@
 namespace FleetFlow.Api.Models;
 
-public class Company
+public class User
 {
+    public int UserId { get; set; }
     public int CompanyId { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string? Address { get; set; }
-    public string? Phone { get; set; }
-    public string SubscriptionStatus { get; set; } = "Trial";
-    public string? SubscriptionPlan { get; set; }
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
+    public string Role { get; set; } = "Technician";
+    public bool IsActive { get; set; } = true;
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
-    public ICollection<User> Users { get; set; } = new List<User>();
-    public ICollection<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
-    public ICollection<ServiceType> ServiceTypes { get; set; } = new List<ServiceType>();
+    public Company? Company { get; set; }
+    public ICollection<WorkOrder> WorkOrders { get; set; } = new List<WorkOrder>();
 }
-

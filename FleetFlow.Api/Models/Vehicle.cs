@@ -1,18 +1,22 @@
 namespace FleetFlow.Api.Models;
 
-public class User
+public class Vehicle
 {
-    public int UserId { get; set; }
+    public int VehicleId { get; set; }
     public int CompanyId { get; set; }
-    public string FirstName { get; set; } = string.Empty;
-    public string LastName { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
-    public string Role { get; set; } = "Technician";
-    public bool IsActive { get; set; } = true;
+    public string VehicleNumber { get; set; } = string.Empty;
+    public string VIN { get; set; } = string.Empty;
+    public int Year { get; set; }
+    public string Make { get; set; } = string.Empty;
+    public string Model { get; set; } = string.Empty;
+    public string? LicensePlate { get; set; }
+    public int CurrentMileage { get; set; }
+    public string Status { get; set; } = "Active";
+    public string? AssignedDriver { get; set; }
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
     public Company? Company { get; set; }
+    public ICollection<MaintenanceSchedule> MaintenanceSchedules { get; set; } = new List<MaintenanceSchedule>();
     public ICollection<WorkOrder> WorkOrders { get; set; } = new List<WorkOrder>();
+    public ICollection<ServiceRecord> ServiceRecords { get; set; } = new List<ServiceRecord>();
 }
-

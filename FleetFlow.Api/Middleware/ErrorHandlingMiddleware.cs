@@ -1,60 +1,43 @@
-using Stripe;
+using System.Net;
+using System.Text.Json;
 
-namespace FleetFlow.Api.Services;
+namespace FleetFlow.Api.Middleware;
 
-public interface IBillingService
+public class ErrorHandlingMiddleware
 {
-    Task<object> CreateCheckoutSessionAsync(string planName, string customerEmail, string successUrl, string cancelUrl);
-}
+    private readonly RequestDelegate _next;
+    private readonly ILogger<ErrorHandlingMiddleware> _logger;
 
-public class BillingService : IBillingService
-{
-    private readonly IConfiguration _configuration;
-
-    public BillingService(IConfiguration configuration)
+    public ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger)
     {
-        _configuration = configuration;
+        _next = next;
+        _logger = logger;
     }
 
-    public async Task<object> CreateCheckoutSessionAsync(string planName, string customerEmail, string successUrl, string cancelUrl)
+    public async Task InvokeAsync(HttpContext context)
     {
-        StripeConfiguration.ApiKey = _configuration["Stripe:ApiKey"];
-
-        var priceMap = new Dictionary<string, long>
+        try
         {
-            ["Starter"] = 4900,
-            ["Growth"] = 9900,
-            ["Pro"] = 19900
-        };
-
-        var options = new SessionCreateOptions
+            await _next(context);
+        }
+        catch (Exception ex)
         {
-            CustomerEmail = customerEmail,
-            LineItems = new List<SessionLineItemOptions>
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = ex switch
             {
-                new()
-                {
-                    PriceData = new SessionLineItemPriceDataOptions
-                    {
-                        Currency = "usd",
-                        UnitAmount = priceMap.GetValueOrDefault(planName, 4900),
-                        ProductData = new SessionLineItemPriceDataProductDataOptions
-                        {
-                            Name = planName
-                        }
-                    },
-                    Quantity = 1
-                }
-            },
-            Mode = "subscription",
-            SuccessUrl = successUrl,
-            CancelUrl = cancelUrl
-        };
+                UnauthorizedAccessException => (int)HttpStatusCode.Unauthorized,
+                InvalidOperationException => (int)HttpStatusCode.BadRequest,
+                _ => (int)HttpStatusCode.InternalServerError
+            };
+            if (context.Response.StatusCode == 500) _logger.LogError(ex, "Unhandled exception");
 
-        var service = new SessionService();
-        var session = await service.CreateAsync(options);
+            var response = new
+            {
+                message = ex.Message,
+                statusCode = context.Response.StatusCode
+            };
 
-        return new { sessionId = session.Id, url = session.Url };
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
     }
 }
-

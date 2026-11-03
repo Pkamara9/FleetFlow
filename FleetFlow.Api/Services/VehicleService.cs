@@ -5,173 +5,132 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FleetFlow.Api.Services;
 
-public interface IAuthService
+public interface IVehicleService
 {
-    Task<AuthResponse> RegisterAsync(RegisterRequest request);
-    Task<AuthResponse> LoginAsync(LoginRequest request);
-    Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request);
+    Task<List<VehicleDto>> GetVehiclesAsync(int companyId);
+    Task<VehicleDto?> GetVehicleByIdAsync(int companyId, int id);
+    Task<VehicleDto> CreateVehicleAsync(int companyId, CreateVehicleRequest request);
+    Task<VehicleDto?> UpdateVehicleAsync(int companyId, int id, CreateVehicleRequest request);
+    Task<bool> DeleteVehicleAsync(int companyId, int id);
 }
 
-public class AuthService : IAuthService
+public class VehicleService : IVehicleService
 {
     private readonly FleetFlowDbContext _context;
-    private readonly IConfiguration _configuration;
-    private readonly ITokenService _tokenService;
 
-    public AuthService(FleetFlowDbContext context, IConfiguration configuration, ITokenService tokenService)
+    public VehicleService(FleetFlowDbContext context)
     {
         _context = context;
-        _configuration = configuration;
-        _tokenService = tokenService;
     }
 
-    public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
+    public async Task<List<VehicleDto>> GetVehiclesAsync(int companyId)
     {
-        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
-        {
-            throw new InvalidOperationException("Email and password are required.");
-        }
-
-        if (await _context.Users.AnyAsync(u => u.Email == request.Email.Trim()))
-        {
-            throw new InvalidOperationException("User already exists.");
-        }
-
-        var company = new Company
-        {
-            Name = request.CompanyName,
-            SubscriptionStatus = "Trial",
-            SubscriptionPlan = "Starter"
-        };
-
-        await _context.Companies.AddAsync(company);
-        await _context.SaveChangesAsync();
-
-        var user = new User
-        {
-            CompanyId = company.CompanyId,
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            Email = request.Email.Trim(),
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            Role = request.Role
-        };
-
-        await _context.Users.AddAsync(user);
-        await _context.SaveChangesAsync();
-
-        var accessToken = _tokenService.GenerateAccessToken(
-            user,
-            _configuration["JwtSettings:Issuer"]!,
-            _configuration["JwtSettings:Audience"]!,
-            _configuration["JwtSettings:Secret"]!,
-            int.Parse(_configuration["JwtSettings:ExpirationMinutes"] ?? "60"));
-
-        var refreshToken = _tokenService.GenerateRefreshToken();
-
-        _context.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = user.UserId,
-            Token = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddDays(int.Parse(_configuration["JwtSettings:RefreshTokenExpirationDays"] ?? "7"))
-        });
-
-        await _context.SaveChangesAsync();
-
-        return new AuthResponse
-        {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(int.Parse(_configuration["JwtSettings:ExpirationMinutes"] ?? "60")),
-            User = new UserDto
+        return await _context.Vehicles
+            .Where(v => v.CompanyId == companyId)
+            .OrderBy(v => v.VehicleNumber)
+            .Select(v => new VehicleDto
             {
-                UserId = user.UserId,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Email = user.Email,
-                Role = user.Role,
-                CompanyName = company.Name
-            }
-        };
+                VehicleId = v.VehicleId,
+                CompanyId = v.CompanyId,
+                VehicleNumber = v.VehicleNumber,
+                VIN = v.VIN,
+                Year = v.Year,
+                Make = v.Make,
+                Model = v.Model,
+                LicensePlate = v.LicensePlate,
+                CurrentMileage = v.CurrentMileage,
+                Status = v.Status,
+                AssignedDriver = v.AssignedDriver,
+                CreatedDate = v.CreatedDate
+            })
+            .ToListAsync();
     }
 
-    public async Task<AuthResponse> LoginAsync(LoginRequest request)
+    public async Task<VehicleDto?> GetVehicleByIdAsync(int companyId, int id)
     {
-        var user = await _context.Users
-            .Include(u => u.Company)
-            .FirstOrDefaultAsync(u => u.Email == request.Email.Trim());
+        return await _context.Vehicles
+            .Where(v => v.CompanyId == companyId && v.VehicleId == id)
+            .Select(v => new VehicleDto
+            {
+                VehicleId = v.VehicleId,
+                CompanyId = v.CompanyId,
+                VehicleNumber = v.VehicleNumber,
+                VIN = v.VIN,
+                Year = v.Year,
+                Make = v.Make,
+                Model = v.Model,
+                LicensePlate = v.LicensePlate,
+                CurrentMileage = v.CurrentMileage,
+                Status = v.Status,
+                AssignedDriver = v.AssignedDriver,
+                CreatedDate = v.CreatedDate
+            })
+            .FirstOrDefaultAsync();
+    }
 
-        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+    public async Task<VehicleDto> CreateVehicleAsync(int companyId, CreateVehicleRequest request)
+    {
+        var vehicle = new Vehicle
         {
-            throw new UnauthorizedAccessException("Invalid email or password.");
-        }
+            CompanyId = companyId,
+            VehicleNumber = request.VehicleNumber,
+            VIN = request.VIN,
+            Year = request.Year,
+            Make = request.Make,
+            Model = request.Model,
+            LicensePlate = request.LicensePlate,
+            CurrentMileage = request.CurrentMileage,
+            Status = request.Status,
+            AssignedDriver = request.AssignedDriver
+        };
 
-        var token = _tokenService.GenerateAccessToken(
-            user,
-            _configuration["JwtSettings:Issuer"]!,
-            _configuration["JwtSettings:Audience"]!,
-            _configuration["JwtSettings:Secret"]!,
-            int.Parse(_configuration["JwtSettings:ExpirationMinutes"] ?? "60"));
-
-        var refreshToken = _tokenService.GenerateRefreshToken();
-        _context.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = user.UserId,
-            Token = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddDays(int.Parse(_configuration["JwtSettings:RefreshTokenExpirationDays"] ?? "7"))
-        });
-
+        _context.Vehicles.Add(vehicle);
         await _context.SaveChangesAsync();
 
-        return new AuthResponse
+        return new VehicleDto
         {
-            AccessToken = token,
-            RefreshToken = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(int.Parse(_configuration["JwtSettings:ExpirationMinutes"] ?? "60")),
-            User = new UserDto
-            {
-                UserId = user.UserId,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Email = user.Email,
-                Role = user.Role,
-                CompanyName = user.Company?.Name ?? ""
-            }
+            VehicleId = vehicle.VehicleId,
+            CompanyId = vehicle.CompanyId,
+            VehicleNumber = vehicle.VehicleNumber,
+            VIN = vehicle.VIN,
+            Year = vehicle.Year,
+            Make = vehicle.Make,
+            Model = vehicle.Model,
+            LicensePlate = vehicle.LicensePlate,
+            CurrentMileage = vehicle.CurrentMileage,
+            Status = vehicle.Status,
+            AssignedDriver = vehicle.AssignedDriver,
+            CreatedDate = vehicle.CreatedDate
         };
     }
 
-    public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request)
+    public async Task<VehicleDto?> UpdateVehicleAsync(int companyId, int id, CreateVehicleRequest request)
     {
-        var stored = await _context.RefreshTokens
-            .Include(r => r.User)
-            .ThenInclude(u => u.Company)
-            .FirstOrDefaultAsync(r => r.Token == request.RefreshToken && !r.IsRevoked && r.ExpiresAt > DateTime.UtcNow);
+        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.CompanyId == companyId && v.VehicleId == id);
+        if (vehicle is null) return null;
 
-        if (stored is null || stored.User is null)
-            throw new UnauthorizedAccessException("Invalid refresh token.");
+        vehicle.VehicleNumber = request.VehicleNumber;
+        vehicle.VIN = request.VIN;
+        vehicle.Year = request.Year;
+        vehicle.Make = request.Make;
+        vehicle.Model = request.Model;
+        vehicle.LicensePlate = request.LicensePlate;
+        vehicle.CurrentMileage = request.CurrentMileage;
+        vehicle.Status = request.Status;
+        vehicle.AssignedDriver = request.AssignedDriver;
 
-        var accessToken = _tokenService.GenerateAccessToken(
-            stored.User,
-            _configuration["JwtSettings:Issuer"]!,
-            _configuration["JwtSettings:Audience"]!,
-            _configuration["JwtSettings:Secret"]!,
-            int.Parse(_configuration["JwtSettings:ExpirationMinutes"] ?? "60"));
+        await _context.SaveChangesAsync();
 
-        return new AuthResponse
-        {
-            AccessToken = accessToken,
-            RefreshToken = request.RefreshToken,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(int.Parse(_configuration["JwtSettings:ExpirationMinutes"] ?? "60")),
-            User = new UserDto
-            {
-                UserId = stored.User.UserId,
-                FirstName = stored.User.FirstName,
-                LastName = stored.User.LastName,
-                Email = stored.User.Email,
-                Role = stored.User.Role,
-                CompanyName = stored.User.Company?.Name ?? ""
-            }
-        };
+        return await GetVehicleByIdAsync(companyId, id);
+    }
+
+    public async Task<bool> DeleteVehicleAsync(int companyId, int id)
+    {
+        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.CompanyId == companyId && v.VehicleId == id);
+        if (vehicle is null) return false;
+
+        _context.Vehicles.Remove(vehicle);
+        await _context.SaveChangesAsync();
+        return true;
     }
 }
-

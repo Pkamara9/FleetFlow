@@ -1,18 +1,13 @@
 namespace FleetFlow.Api.Models;
 
-public class ServiceRecord
+public class AuditLog
 {
-    public int ServiceRecordId { get; set; }
-    public int VehicleId { get; set; }
-    public int? WorkOrderId { get; set; }
-    public int ServiceTypeId { get; set; }
-    public DateTime ServiceDate { get; set; }
-    public int Mileage { get; set; }
-    public decimal Cost { get; set; }
-    public string? Notes { get; set; }
-
-    public Vehicle? Vehicle { get; set; }
-    public WorkOrder? WorkOrder { get; set; }
-    public ServiceType? ServiceType { get; set; }
+    public int AuditLogId { get; set; }
+    public int? CompanyId { get; set; }
+    public int? UserId { get; set; }
+    public string EntityType { get; set; } = string.Empty;
+    public int? EntityId { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string? Details { get; set; }
+    public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 }
-

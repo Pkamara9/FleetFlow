@@ -5,133 +5,134 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FleetFlow.Api.Services;
 
-public interface IVehicleService
+public interface IWorkOrderService
 {
-    Task<List<VehicleDto>> GetVehiclesAsync(int companyId);
-    Task<VehicleDto?> GetVehicleByIdAsync(int companyId, int id);
-    Task<VehicleDto> CreateVehicleAsync(int companyId, CreateVehicleRequest request);
-    Task<VehicleDto?> UpdateVehicleAsync(int companyId, int id, CreateVehicleRequest request);
-    Task<bool> DeleteVehicleAsync(int companyId, int id);
+    Task<List<WorkOrderDto>> GetWorkOrdersAsync(int companyId);
+    Task<WorkOrderDto?> GetWorkOrderByIdAsync(int companyId, int id);
+    Task<WorkOrderDto> CreateWorkOrderAsync(int companyId, CreateWorkOrderRequest request);
+    Task<WorkOrderDto?> UpdateWorkOrderAsync(int companyId, int id, CreateWorkOrderRequest request);
+    Task<bool> DeleteWorkOrderAsync(int companyId, int id);
 }
 
-public class VehicleService : IVehicleService
+public class WorkOrderService : IWorkOrderService
 {
     private readonly FleetFlowDbContext _context;
 
-    public VehicleService(FleetFlowDbContext context)
+    public WorkOrderService(FleetFlowDbContext context)
     {
         _context = context;
     }
 
-    public async Task<List<VehicleDto>> GetVehiclesAsync(int companyId)
+    public async Task<List<WorkOrderDto>> GetWorkOrdersAsync(int companyId)
     {
-        return await _context.Vehicles
-            .Where(v => v.CompanyId == companyId)
-            .OrderBy(v => v.VehicleNumber)
-            .Select(v => new VehicleDto
-            {
-                VehicleId = v.VehicleId,
-                CompanyId = v.CompanyId,
-                VehicleNumber = v.VehicleNumber,
-                VIN = v.VIN,
-                Year = v.Year,
-                Make = v.Make,
-                Model = v.Model,
-                LicensePlate = v.LicensePlate,
-                CurrentMileage = v.CurrentMileage,
-                Status = v.Status,
-                AssignedDriver = v.AssignedDriver,
-                CreatedDate = v.CreatedDate
-            })
+        var query = await _context.WorkOrders
+            .Include(w => w.Vehicle)
+            .Where(w => w.Vehicle != null && w.Vehicle.CompanyId == companyId)
+            .OrderByDescending(w => w.CreatedDate)
             .ToListAsync();
-    }
 
-    public async Task<VehicleDto?> GetVehicleByIdAsync(int companyId, int id)
-    {
-        return await _context.Vehicles
-            .Where(v => v.CompanyId == companyId && v.VehicleId == id)
-            .Select(v => new VehicleDto
-            {
-                VehicleId = v.VehicleId,
-                CompanyId = v.CompanyId,
-                VehicleNumber = v.VehicleNumber,
-                VIN = v.VIN,
-                Year = v.Year,
-                Make = v.Make,
-                Model = v.Model,
-                LicensePlate = v.LicensePlate,
-                CurrentMileage = v.CurrentMileage,
-                Status = v.Status,
-                AssignedDriver = v.AssignedDriver,
-                CreatedDate = v.CreatedDate
-            })
-            .FirstOrDefaultAsync();
-    }
-
-    public async Task<VehicleDto> CreateVehicleAsync(int companyId, CreateVehicleRequest request)
-    {
-        var vehicle = new Vehicle
+        return query.Select(w => new WorkOrderDto
         {
-            CompanyId = companyId,
-            VehicleNumber = request.VehicleNumber,
-            VIN = request.VIN,
-            Year = request.Year,
-            Make = request.Make,
-            Model = request.Model,
-            LicensePlate = request.LicensePlate,
-            CurrentMileage = request.CurrentMileage,
+            WorkOrderId = w.WorkOrderId,
+            VehicleId = w.VehicleId,
+            AssignedUserId = w.AssignedUserId,
+            VehicleNumber = w.Vehicle?.VehicleNumber ?? string.Empty,
+            Title = w.Title,
+            Description = w.Description,
+            Priority = w.Priority,
+            Status = w.Status,
+            LaborCost = w.LaborCost,
+            PartsCost = w.PartsCost,
+            TotalCost = w.TotalCost,
+            CreatedDate = w.CreatedDate,
+            CompletedDate = w.CompletedDate
+        }).ToList();
+    }
+
+    public async Task<WorkOrderDto?> GetWorkOrderByIdAsync(int companyId, int id)
+    {
+        var workOrder = await _context.WorkOrders
+            .Include(w => w.Vehicle)
+            .FirstOrDefaultAsync(w => w.WorkOrderId == id && w.Vehicle != null && w.Vehicle.CompanyId == companyId);
+
+        if (workOrder is null) return null;
+
+        return new WorkOrderDto
+        {
+            WorkOrderId = workOrder.WorkOrderId,
+            VehicleId = workOrder.VehicleId,
+            AssignedUserId = workOrder.AssignedUserId,
+            VehicleNumber = workOrder.Vehicle?.VehicleNumber ?? string.Empty,
+            Title = workOrder.Title,
+            Description = workOrder.Description,
+            Priority = workOrder.Priority,
+            Status = workOrder.Status,
+            LaborCost = workOrder.LaborCost,
+            PartsCost = workOrder.PartsCost,
+            TotalCost = workOrder.TotalCost,
+            CreatedDate = workOrder.CreatedDate,
+            CompletedDate = workOrder.CompletedDate
+        };
+    }
+
+    public async Task<WorkOrderDto> CreateWorkOrderAsync(int companyId, CreateWorkOrderRequest request)
+    {
+        var vehicleExists = await _context.Vehicles.AnyAsync(v => v.VehicleId == request.VehicleId && v.CompanyId == companyId);
+        if (!vehicleExists) throw new InvalidOperationException("Vehicle not found in your company.");
+
+        var workOrder = new WorkOrder
+        {
+            VehicleId = request.VehicleId,
+            AssignedUserId = request.AssignedUserId,
+            Title = request.Title,
+            Description = request.Description,
+            Priority = request.Priority,
             Status = request.Status,
-            AssignedDriver = request.AssignedDriver
+            LaborCost = 0,
+            PartsCost = 0,
+            TotalCost = 0
         };
 
-        _context.Vehicles.Add(vehicle);
+        _context.WorkOrders.Add(workOrder);
         await _context.SaveChangesAsync();
 
-        return new VehicleDto
+        return await GetWorkOrderByIdAsync(companyId, workOrder.WorkOrderId) ?? new WorkOrderDto();
+    }
+
+    public async Task<WorkOrderDto?> UpdateWorkOrderAsync(int companyId, int id, CreateWorkOrderRequest request)
+    {
+        var workOrder = await _context.WorkOrders
+            .Include(w => w.Vehicle)
+            .FirstOrDefaultAsync(w => w.WorkOrderId == id && w.Vehicle != null && w.Vehicle.CompanyId == companyId);
+
+        if (workOrder is null) return null;
+
+        workOrder.VehicleId = request.VehicleId;
+        workOrder.AssignedUserId = request.AssignedUserId;
+        workOrder.Title = request.Title;
+        workOrder.Description = request.Description;
+        workOrder.Priority = request.Priority;
+        workOrder.Status = request.Status;
+
+        if (request.Status == "Completed")
         {
-            VehicleId = vehicle.VehicleId,
-            CompanyId = vehicle.CompanyId,
-            VehicleNumber = vehicle.VehicleNumber,
-            VIN = vehicle.VIN,
-            Year = vehicle.Year,
-            Make = vehicle.Make,
-            Model = vehicle.Model,
-            LicensePlate = vehicle.LicensePlate,
-            CurrentMileage = vehicle.CurrentMileage,
-            Status = vehicle.Status,
-            AssignedDriver = vehicle.AssignedDriver,
-            CreatedDate = vehicle.CreatedDate
-        };
-    }
-
-    public async Task<VehicleDto?> UpdateVehicleAsync(int companyId, int id, CreateVehicleRequest request)
-    {
-        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.CompanyId == companyId && v.VehicleId == id);
-        if (vehicle is null) return null;
-
-        vehicle.VehicleNumber = request.VehicleNumber;
-        vehicle.VIN = request.VIN;
-        vehicle.Year = request.Year;
-        vehicle.Make = request.Make;
-        vehicle.Model = request.Model;
-        vehicle.LicensePlate = request.LicensePlate;
-        vehicle.CurrentMileage = request.CurrentMileage;
-        vehicle.Status = request.Status;
-        vehicle.AssignedDriver = request.AssignedDriver;
+            workOrder.CompletedDate ??= DateTime.UtcNow;
+        }
 
         await _context.SaveChangesAsync();
-
-        return await GetVehicleByIdAsync(companyId, id);
+        return await GetWorkOrderByIdAsync(companyId, id);
     }
 
-    public async Task<bool> DeleteVehicleAsync(int companyId, int id)
+    public async Task<bool> DeleteWorkOrderAsync(int companyId, int id)
     {
-        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.CompanyId == companyId && v.VehicleId == id);
-        if (vehicle is null) return false;
+        var workOrder = await _context.WorkOrders
+            .Include(w => w.Vehicle)
+            .FirstOrDefaultAsync(w => w.WorkOrderId == id && w.Vehicle != null && w.Vehicle.CompanyId == companyId);
 
-        _context.Vehicles.Remove(vehicle);
+        if (workOrder is null) return false;
+
+        _context.WorkOrders.Remove(workOrder);
         await _context.SaveChangesAsync();
         return true;
     }
 }
-
